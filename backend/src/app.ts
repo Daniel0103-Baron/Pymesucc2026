@@ -18,8 +18,35 @@ const origenesConfigurados = (process.env.CORS_ORIGIN || 'http://localhost:5173'
   .map((origen) => origen.trim())
   .filter(Boolean);
 
+const regexSubdominioNetlify = /^https:\/\/[a-z0-9-]+(?:--[a-z0-9-]+)?\.netlify\.app$/i;
+
+const esOrigenPermitido = (origen: string): boolean => {
+  if (origenesConfigurados.includes(origen)) {
+    return true;
+  }
+
+  // Permite dominios de preview y dominio principal de Netlify.
+  return regexSubdominioNetlify.test(origen);
+};
+
 app.use(helmet());
-app.use(cors({ origin: origenesConfigurados, credentials: true }));
+app.use(cors({
+  origin: (origen, callback) => {
+    // Requests sin origin (health checks/server-to-server) se permiten.
+    if (!origen) {
+      callback(null, true);
+      return;
+    }
+
+    if (esOrigenPermitido(origen)) {
+      callback(null, true);
+      return;
+    }
+
+    callback(new Error('Origen no permitido por CORS'));
+  },
+  credentials: true
+}));
 app.use(express.json());
 
 app.get('/api/health', (req, res) => {
