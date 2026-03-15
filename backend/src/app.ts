@@ -1,6 +1,7 @@
 import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
+import dotenv from 'dotenv';
 
 import autenticacionRutas from './modulos/autenticacion/autenticacion.rutas';
 import empresasRutas from './modulos/empresas/empresas.rutas';
@@ -10,8 +11,15 @@ import resultadosRutas from './modulos/resultados/resultados.rutas';
 
 const app = express();
 
+dotenv.config();
+
+const origenesConfigurados = (process.env.CORS_ORIGIN || 'http://localhost:5173')
+  .split(',')
+  .map((origen) => origen.trim())
+  .filter(Boolean);
+
 app.use(helmet());
-app.use(cors({ origin: 'http://localhost:5173', credentials: true }));
+app.use(cors({ origin: origenesConfigurados, credentials: true }));
 app.use(express.json());
 
 app.get('/api/health', (req, res) => {
