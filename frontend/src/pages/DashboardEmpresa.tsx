@@ -56,10 +56,17 @@ interface DetalleItemReporte {
 
 interface ReporteDetallado {
   empresa: {
+    nombre_empresa?: string;
     razon_social: string;
     nit: string;
     sector: string;
     ciudad: string;
+    tamano?: string;
+    ano_constitucion?: number;
+    parque_tecnologico?: string;
+    representante?: string;
+    cargo_entrevistado?: string;
+    telefono?: string;
   };
   resumen: {
     puntaje_global: number;
@@ -734,7 +741,7 @@ export default function DashboardEmpresa() {
               <h2 class="section-title">Reporte de Madurez Digital - SIEDSS</h2>
               <p class="muted">Universidad Cooperativa de Colombia</p>
               <p class="muted">Fecha de cálculo: ${escaparHtml(fecha)}</p>
-              ${empresa ? `<p class="muted">Empresa: ${escaparHtml(empresa.razon_social)} | NIT: ${escaparHtml(empresa.nit)} | Sector: ${escaparHtml(empresa.sector)} | Ciudad: ${escaparHtml(empresa.ciudad)}</p>` : ''}
+              ${empresa ? `<p class="muted">Nombre de la empresa: ${escaparHtml(empresa.nombre_empresa ?? empresa.razon_social)} | NIT: ${escaparHtml(empresa.nit)} | Sector: ${escaparHtml(empresa.sector)} | Ciudad: ${escaparHtml(empresa.ciudad)} | Tamaño: ${escaparHtml(empresa.tamano ?? 'N/A')} | Año constitución: ${empresa.ano_constitucion ?? 'N/A'} | Representante: ${escaparHtml(empresa.representante ?? 'N/A')} | Cargo entrevistado: ${escaparHtml(empresa.cargo_entrevistado ?? 'N/A')} | Teléfono: ${escaparHtml(empresa.telefono ?? 'N/A')} | Parque tecnológico: ${escaparHtml(empresa.parque_tecnologico ?? 'N/A')}</p>` : ''}
               <div class="kpi-grid">
                 <div class="kpi"><div class="k">Puntaje Global</div><div class="v">${puntajeGlobal}%</div></div>
                 <div class="kpi"><div class="k">Nivel Global</div><div class="v" style="font-size:20px">${escaparHtml(nivelGlobal)}</div></div>
@@ -1304,9 +1311,17 @@ export default function DashboardEmpresa() {
                   <h4 className="text-lg font-bold text-[#0F172A]">Reporte SIEDSS</h4>
                   <p className="text-sm text-[#475569]">Fecha de cálculo: {vistaPreviaFecha}</p>
                   {reporteDetallado?.empresa && (
+                    <>
                     <p className="text-sm text-[#475569] mt-1">
-                      Empresa: {reporteDetallado.empresa.razon_social} | NIT: {reporteDetallado.empresa.nit}
+                      Nombre de la empresa: {reporteDetallado.empresa.nombre_empresa ?? reporteDetallado.empresa.razon_social} | NIT: {reporteDetallado.empresa.nit}
                     </p>
+                    <p className="text-sm text-[#475569] mt-1">
+                      Sector: {reporteDetallado.empresa.sector} | Ciudad: {reporteDetallado.empresa.ciudad} | Tamaño: {reporteDetallado.empresa.tamano ?? 'N/A'}
+                    </p>
+                    <p className="text-sm text-[#475569] mt-1">
+                      Año constitución: {reporteDetallado.empresa.ano_constitucion ?? 'N/A'} | Representante: {reporteDetallado.empresa.representante ?? 'N/A'} | Cargo: {reporteDetallado.empresa.cargo_entrevistado ?? 'N/A'} | Teléfono: {reporteDetallado.empresa.telefono ?? 'N/A'}
+                    </p>
+                    </>
                   )}
                 </div>
                 <div className="rounded-xl border border-[#BAE6FD] bg-[#FFFFFF]/90 px-4 py-3 text-right min-w-[160px]">

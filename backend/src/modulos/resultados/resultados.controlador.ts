@@ -176,10 +176,17 @@ export const obtenerReporteDetallado = async (req: SolicitudAutenticada, res: Re
 
     res.json({
       empresa: {
+        nombre_empresa: empresa.razon_social,
         razon_social: empresa.razon_social,
         nit: empresa.nit,
         sector: empresa.sector,
         ciudad: empresa.ciudad,
+        tamano: empresa.tamano,
+        ano_constitucion: empresa.ano_constitucion,
+        parque_tecnologico: empresa.parque_tecnologico,
+        representante: empresa.representante,
+        cargo_entrevistado: empresa.cargo_entrevistado,
+        telefono: empresa.telefono,
       },
       resumen: {
         puntaje_global: ultimoResultado.porcentaje_global,

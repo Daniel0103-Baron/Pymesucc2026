@@ -39,6 +39,18 @@ interface RespuestaPayload {
   valor_numerico?: number;
 }
 
+const separarEnunciadoYDetalle = (textoPregunta: string): { enunciado: string; detalle: string | null } => {
+  const match = textoPregunta.match(/^(.*?)(\s*\(([^)]+)\))$/);
+  if (!match) {
+    return { enunciado: textoPregunta, detalle: null };
+  }
+
+  return {
+    enunciado: match[1].trim(),
+    detalle: match[3].trim(),
+  };
+};
+
 export default function EncuestaForm() {
   const navigate = useNavigate();
   const location = useLocation();
@@ -245,12 +257,18 @@ export default function EncuestaForm() {
 
       {/* Formulario Dinámico */}
       <form onSubmit={handleSubmit(onSubmit)} className="space-y-8">
-        {preguntasVisibles.map((pregunta, index) => (
+        {preguntasVisibles.map((pregunta, index) => {
+          const { enunciado, detalle } = separarEnunciadoYDetalle(pregunta.texto_pregunta);
+
+          return (
           <div key={pregunta._id} className="p-6 rounded-xl border border-[#E5E7EB] bg-[#F5F7FA] hover:bg-[#FFFFFF] transition-all">
-            <label className="block text-base font-medium text-[#333333] mb-4">
+            <label className="block text-base font-medium text-[#333333] mb-1">
               <span className="text-[#00ACC9] mr-2 font-bold">{index + 1}.</span>
-              {pregunta.texto_pregunta}
+              {enunciado}
             </label>
+            {detalle && (
+              <p className="text-sm text-[#6B7280] mb-3">{detalle}</p>
+            )}
 
 
             {pregunta.tipo_pregunta === 'numero' ? (
@@ -297,7 +315,8 @@ export default function EncuestaForm() {
               <p className="text-sm text-[#00ACC9] mt-3">{errors[pregunta._id]?.message as string}</p>
             )}
           </div>
-        ))}
+        );
+        })}
 
         {/* Action Buttons */}
         <div className="flex justify-between pt-6 border-t border-[#E5E7EB] mt-10">

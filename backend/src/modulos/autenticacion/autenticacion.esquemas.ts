@@ -10,7 +10,7 @@ export const esquemaLogin = z.object({
 export const esquemaRegistroEmpresa = z.object({
   body: z.object({
     nit: z.string().min(1, 'El NIT es obligatorio'),
-    razon_social: z.string().min(1, 'La razón social es obligatoria'),
+    razon_social: z.string().min(1, 'El nombre de la empresa es obligatorio'),
     sector: z.string().min(1, 'El sector es obligatorio'),
     tamano: z.enum(['Micro', 'Pequeña', 'Mediana', 'Grande']),
     ciudad: z.string().min(1, 'La ciudad es obligatoria'),

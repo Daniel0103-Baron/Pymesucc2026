@@ -15,7 +15,7 @@ const loginSchema = z.object({
 
 const registroEmpresaSchema = z.object({
   nit: z.string().min(1, 'El NIT es obligatorio'),
-  razon_social: z.string().min(1, 'La razón social es obligatoria'),
+  razon_social: z.string().min(1, 'El nombre de la empresa es obligatorio'),
   sector: z.string().min(1, 'El sector es obligatorio'),
   tamano: z.enum(['Micro', 'Pequeña', 'Mediana', 'Grande']),
   ciudad: z.string().min(1, 'La ciudad es obligatoria'),
@@ -375,7 +375,7 @@ export default function Login() {
                             {empresaErrors.nit && <p className="text-sm text-[#00ACC9] mt-1">{empresaErrors.nit.message}</p>}
                           </div>
                           <div>
-                            <label className="block text-sm font-semibold text-[#333333] mb-1">Razón social</label>
+                            <label className="block text-sm font-semibold text-[#333333] mb-1">Nombre de la empresa</label>
                             <input {...registerEmpresa('razon_social')} className="w-full px-4 py-2.5 border border-[#E5E7EB] rounded-lg" />
                             {empresaErrors.razon_social && <p className="text-sm text-[#00ACC9] mt-1">{empresaErrors.razon_social.message}</p>}
                           </div>
