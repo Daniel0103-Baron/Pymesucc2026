@@ -273,6 +273,7 @@ export default function DashboardEmpresa() {
   const mapaNombreDimension = new Map(chartData.map((d) => [normalizarDimension(d.name), d.name]));
 
   const detalleItems = reporteDetallado?.detalle_items ?? [];
+  const itemsPuntuables = detalleItems.filter((item) => item.porcentaje_item !== null);
   const textoBusqueda = busquedaItem.trim().toLowerCase();
   const filtrosActivos = filtroDimension !== 'todas' || filtroNivel !== 'todos' || Boolean(textoBusqueda);
 
@@ -286,6 +287,8 @@ export default function DashboardEmpresa() {
 
     return coincideDimension && coincideNivel && coincideBusqueda;
   });
+
+  const itemsFiltradosPuntuables = itemsFiltrados.filter((item) => item.porcentaje_item !== null);
 
   const chartDataFiltrado = (() => {
     if (!filtrosActivos || !detalleItems.length) {
@@ -335,8 +338,8 @@ export default function DashboardEmpresa() {
   const nivelesOrden = ['muy_bajo', 'bajo', 'intermedio', 'alto', 'avanzado'];
   const baseNiveles = filtrosActivos
     ? nivelesOrden.map((nivel) => {
-      const cantidad = itemsFiltrados.filter((item) => (item.nivel_item ?? '') === nivel).length;
-      const porcentaje = itemsFiltrados.length ? Math.round((cantidad / itemsFiltrados.length) * 100) : 0;
+      const cantidad = itemsFiltradosPuntuables.filter((item) => (item.nivel_item ?? '') === nivel).length;
+      const porcentaje = itemsFiltradosPuntuables.length ? Math.round((cantidad / itemsFiltradosPuntuables.length) * 100) : 0;
       return { nivel, cantidad, porcentaje };
     })
     : (reporteDetallado?.resumen_por_nivel ?? []).map((n) => ({
@@ -377,7 +380,7 @@ export default function DashboardEmpresa() {
     };
   });
 
-  const totalItemsEvaluados = filtrosActivos ? itemsFiltrados.length : (reporteDetallado?.detalle_items.length ?? 0);
+  const totalItemsEvaluados = filtrosActivos ? itemsFiltradosPuntuables.length : itemsPuntuables.length;
   const dimensionesOrdenadas = [...chartDataOrdenado].sort((a, b) => b.puntaje - a.puntaje);
   const mejorDimension = dimensionesOrdenadas[0];
   const menorDimension = dimensionesOrdenadas[dimensionesOrdenadas.length - 1];
@@ -577,11 +580,12 @@ export default function DashboardEmpresa() {
       .map(([dimension, lista]) => {
         const filas = lista
           .map((item, index) => {
+            const esInformativo = item.porcentaje_item === null;
             const porcentaje = item.porcentaje_item !== null
               ? Math.max(0, Math.min(100, Math.round(item.porcentaje_item)))
               : null;
             const nivel = item.nivel_item ? etiquetaNivel(item.nivel_item) : 'Informativo';
-            const valorMostrado = item.valor_respuesta ?? item.valor_numerico ?? 'N/A';
+            const valorMostrado = esInformativo ? 'N/A' : (item.valor_respuesta ?? item.valor_numerico ?? 'N/A');
             return `
               <div class="item-row">
                 <div class="item-header">
@@ -1207,7 +1211,7 @@ export default function DashboardEmpresa() {
                     {itemsAgrupadosPorDimension[dimension].map((item, idx) => (
                       <tr key={`${dimension}-${idx}`} className={idx % 2 === 0 ? 'bg-[#FFFFFF]' : 'bg-[#FCFCFD]'}>
                         <td className="p-3 border border-[#E5E7EB] text-[#333333]">{item.pregunta}</td>
-                        <td className="p-3 border border-[#E5E7EB] text-[#333333]">{item.valor_respuesta ?? item.valor_numerico ?? 'N/A'}</td>
+                        <td className="p-3 border border-[#E5E7EB] text-[#333333]">{item.porcentaje_item === null ? 'N/A' : (item.valor_respuesta ?? item.valor_numerico ?? 'N/A')}</td>
                         <td className="p-3 border border-[#E5E7EB] text-[#333333]">
                           {item.nivel_item ? (
                             <span
