@@ -33,6 +33,12 @@ interface ApiErrorResponse {
   error?: string;
 }
 
+interface RespuestaPayload {
+  id_pregunta: string;
+  texto_respuesta?: string;
+  valor_numerico?: number;
+}
+
 export default function EncuestaForm() {
   const navigate = useNavigate();
   const location = useLocation();
@@ -48,9 +54,11 @@ export default function EncuestaForm() {
   const empresaNombreObjetivo = query.get('empresa') ?? '';
   const accesoConsultorSinEmpresa = (user?.rol === 'semillero' || user?.rol === 'universidad') && !empresaIdObjetivo;
 
-  const { register, handleSubmit, formState: { errors }, trigger } = useForm<EncuestaFormValues>({
+  const { register, handleSubmit, formState: { errors }, trigger, watch } = useForm<EncuestaFormValues>({
     mode: 'onChange'
   });
+
+  const respuestasActuales = watch();
 
   useEffect(() => {
     const fetchEsquema = async () => {
@@ -75,11 +83,41 @@ export default function EncuestaForm() {
 
   const totalPasos = esquema.length;
   const preguntasPorId = new Map(esquema.flatMap((seccion) => seccion.preguntas.map((pregunta) => [pregunta._id, pregunta])));
+  const codigoPorPreguntaId = new Map(
+    esquema.flatMap((seccion) => seccion.preguntas.map((pregunta) => {
+      const codigo = pregunta.texto_pregunta.match(/^\d+(?:\.\d+)?/)?.[0] ?? '';
+      return [pregunta._id, codigo] as const;
+    }))
+  );
+
+  const idPreguntaColaboracionUniversidad = [...codigoPorPreguntaId.entries()].find(([, codigo]) => codigo === '7.1')?.[0];
+  const idPreguntaColaboracionParque = [...codigoPorPreguntaId.entries()].find(([, codigo]) => codigo === '7.2')?.[0];
+
+  const esRespuestaSi = (valor: string | number | undefined): boolean => Number(valor) === 5;
+
+  const esMecanismoUniversidad = (codigo: string): boolean => ['7.3', '7.4', '7.5', '7.6'].includes(codigo);
+  const esMecanismoParque = (codigo: string): boolean => ['7.7', '7.8', '7.9', '7.10'].includes(codigo);
+
+  const debeMostrarPregunta = (pregunta: Pregunta, respuestas: EncuestaFormValues): boolean => {
+    const codigo = codigoPorPreguntaId.get(pregunta._id) ?? '';
+
+    if (esMecanismoUniversidad(codigo)) {
+      return esRespuestaSi(respuestas[idPreguntaColaboracionUniversidad ?? '']);
+    }
+
+    if (esMecanismoParque(codigo)) {
+      return esRespuestaSi(respuestas[idPreguntaColaboracionParque ?? '']);
+    }
+
+    return true;
+  };
 
   const onNext = async () => {
     // Validate current step fields before proceeding
     const seccionActual = esquema[pasoActual];
-    const fieldsToValidate = seccionActual.preguntas.map(p => p._id);
+    const fieldsToValidate = seccionActual.preguntas
+      .filter((pregunta) => debeMostrarPregunta(pregunta, respuestasActuales))
+      .map((pregunta) => pregunta._id);
     const valid = await trigger(fieldsToValidate);
     
     if (valid && pasoActual < totalPasos - 1) {
@@ -93,22 +131,40 @@ export default function EncuestaForm() {
     setServerError(null);
     try {
       // Transform form data by question type to align with backend schema.
-      const respuestasPayload = Object.keys(data).map((key) => {
+      const respuestasPayload = Object.keys(data).reduce<RespuestaPayload[]>((acumulado, key) => {
         const pregunta = preguntasPorId.get(key);
         const valor = data[key];
 
-        if (pregunta?.tipo_pregunta === 'texto') {
-          return {
-            id_pregunta: key,
-            texto_respuesta: String(valor ?? '').trim()
-          };
+        if (!pregunta || !debeMostrarPregunta(pregunta, data)) {
+          return acumulado;
         }
 
-        return {
+        const codigo = codigoPorPreguntaId.get(key) ?? '';
+
+        if (codigo === '1.1') {
+          const opcion = pregunta.opciones.find((opc) => Number(opc.valor_numerico) === Number(valor));
+          acumulado.push({
+            id_pregunta: key,
+            texto_respuesta: opcion?.texto_opcion ?? String(valor ?? '').trim()
+          });
+          return acumulado;
+        }
+
+        if (pregunta?.tipo_pregunta === 'texto') {
+          acumulado.push({
+            id_pregunta: key,
+            texto_respuesta: String(valor ?? '').trim()
+          });
+          return acumulado;
+        }
+
+        acumulado.push({
           id_pregunta: key,
           valor_numerico: Number(valor)
-        };
-      });
+        });
+
+        return acumulado;
+      }, []);
 
       await api.post('/respuestas/guardar', {
         respuestas: respuestasPayload,
@@ -158,6 +214,7 @@ export default function EncuestaForm() {
   }
 
   const seccionActual = esquema[pasoActual];
+  const preguntasVisibles = seccionActual.preguntas.filter((pregunta) => debeMostrarPregunta(pregunta, respuestasActuales));
   const progreso = ((pasoActual + 1) / totalPasos) * 100;
 
   return (
@@ -188,7 +245,7 @@ export default function EncuestaForm() {
 
       {/* Formulario Dinámico */}
       <form onSubmit={handleSubmit(onSubmit)} className="space-y-8">
-        {seccionActual.preguntas.map((pregunta, index) => (
+        {preguntasVisibles.map((pregunta, index) => (
           <div key={pregunta._id} className="p-6 rounded-xl border border-[#E5E7EB] bg-[#F5F7FA] hover:bg-[#FFFFFF] transition-all">
             <label className="block text-base font-medium text-[#333333] mb-4">
               <span className="text-[#00ACC9] mr-2 font-bold">{index + 1}.</span>
