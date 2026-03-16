@@ -49,6 +49,7 @@ interface DetalleItemReporte {
   dimension: string;
   pregunta: string;
   valor_numerico: number | null;
+  valor_respuesta?: string | number | null;
   porcentaje_item: number | null;
   nivel_item: string | null;
 }
@@ -576,8 +577,11 @@ export default function DashboardEmpresa() {
       .map(([dimension, lista]) => {
         const filas = lista
           .map((item, index) => {
-            const porcentaje = Math.max(0, Math.min(100, Math.round(item.porcentaje_item ?? 0)));
-            const nivel = item.nivel_item ? etiquetaNivel(item.nivel_item) : 'Sin dato';
+            const porcentaje = item.porcentaje_item !== null
+              ? Math.max(0, Math.min(100, Math.round(item.porcentaje_item)))
+              : null;
+            const nivel = item.nivel_item ? etiquetaNivel(item.nivel_item) : 'Informativo';
+            const valorMostrado = item.valor_respuesta ?? item.valor_numerico ?? 'N/A';
             return `
               <div class="item-row">
                 <div class="item-header">
@@ -585,13 +589,14 @@ export default function DashboardEmpresa() {
                   <span class="item-question">${escaparHtml(item.pregunta)}</span>
                 </div>
                 <div class="item-metrics">
-                  <span class="item-badge">Valor: ${item.valor_numerico ?? 'N/A'}</span>
+                  <span class="item-badge">Valor: ${escaparHtml(String(valorMostrado))}</span>
                   <span class="item-badge">Nivel: ${escaparHtml(nivel)}</span>
-                  <span class="item-badge item-badge-strong">${porcentaje}%</span>
+                  <span class="item-badge item-badge-strong">${porcentaje !== null ? `${porcentaje}%` : 'Sin puntuación'}</span>
                 </div>
+                ${porcentaje !== null ? `
                 <div class="item-bar-track">
                   <div class="item-bar-fill" style="width:${porcentaje}%"></div>
-                </div>
+                </div>` : ''}
               </div>
             `;
           })
@@ -1202,7 +1207,7 @@ export default function DashboardEmpresa() {
                     {itemsAgrupadosPorDimension[dimension].map((item, idx) => (
                       <tr key={`${dimension}-${idx}`} className={idx % 2 === 0 ? 'bg-[#FFFFFF]' : 'bg-[#FCFCFD]'}>
                         <td className="p-3 border border-[#E5E7EB] text-[#333333]">{item.pregunta}</td>
-                        <td className="p-3 border border-[#E5E7EB] text-[#333333]">{item.valor_numerico ?? 'N/A'}</td>
+                        <td className="p-3 border border-[#E5E7EB] text-[#333333]">{item.valor_respuesta ?? item.valor_numerico ?? 'N/A'}</td>
                         <td className="p-3 border border-[#E5E7EB] text-[#333333]">
                           {item.nivel_item ? (
                             <span
@@ -1214,7 +1219,7 @@ export default function DashboardEmpresa() {
                             >
                               {etiquetaNivel(item.nivel_item)}
                             </span>
-                          ) : 'N/A'}
+                          ) : 'Informativo'}
                         </td>
                       </tr>
                     ))}

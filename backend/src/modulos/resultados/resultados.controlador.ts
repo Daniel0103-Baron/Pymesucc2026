@@ -141,7 +141,11 @@ export const obtenerReporteDetallado = async (req: SolicitudAutenticada, res: Re
 
         const seccion = mapaSecciones.get(String(pregunta.id_seccion));
         const valor = typeof r.valor_numerico === 'number' ? r.valor_numerico : null;
-        const porcentajeItem = valor !== null ? calcularPorcentaje(valor) : null;
+        const esDatoGeneral = seccion?.nombre === 'datos_generales';
+        const valorInformativo = typeof r.texto_respuesta === 'string' && r.texto_respuesta.trim().length > 0
+          ? r.texto_respuesta.trim()
+          : valor;
+        const porcentajeItem = !esDatoGeneral && valor !== null ? calcularPorcentaje(valor) : null;
         const nivelItem = porcentajeItem !== null ? clasificarNivel(porcentajeItem) : null;
 
         return {
@@ -149,6 +153,7 @@ export const obtenerReporteDetallado = async (req: SolicitudAutenticada, res: Re
           dimension: seccion?.descripcion ?? seccion?.nombre ?? 'sin_dimension',
           pregunta: pregunta.texto_pregunta,
           valor_numerico: valor,
+          valor_respuesta: valorInformativo,
           porcentaje_item: porcentajeItem,
           nivel_item: nivelItem,
         };
