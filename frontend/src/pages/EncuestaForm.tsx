@@ -109,6 +109,7 @@ export default function EncuestaForm() {
 
   const esMecanismoUniversidad = (codigo: string): boolean => ['7.3', '7.4', '7.5', '7.6'].includes(codigo);
   const esMecanismoParque = (codigo: string): boolean => ['7.7', '7.8', '7.9', '7.10'].includes(codigo);
+  const esDatoGeneral = (codigo: string): boolean => codigo.startsWith('1.');
 
   const debeMostrarPregunta = (pregunta: Pregunta, respuestas: EncuestaFormValues): boolean => {
     const codigo = codigoPorPreguntaId.get(pregunta._id) ?? '';
@@ -153,11 +154,19 @@ export default function EncuestaForm() {
 
         const codigo = codigoPorPreguntaId.get(key) ?? '';
 
-        if (codigo === '1.1') {
+        if (esDatoGeneral(codigo) && pregunta.tipo_pregunta === 'seleccion_unica') {
           const opcion = pregunta.opciones.find((opc) => Number(opc.valor_numerico) === Number(valor));
           acumulado.push({
             id_pregunta: key,
             texto_respuesta: opcion?.texto_opcion ?? String(valor ?? '').trim()
+          });
+          return acumulado;
+        }
+
+        if (esDatoGeneral(codigo)) {
+          acumulado.push({
+            id_pregunta: key,
+            texto_respuesta: String(valor ?? '').trim()
           });
           return acumulado;
         }
@@ -259,9 +268,19 @@ export default function EncuestaForm() {
       <form onSubmit={handleSubmit(onSubmit)} className="space-y-8">
         {preguntasVisibles.map((pregunta, index) => {
           const { enunciado, detalle } = separarEnunciadoYDetalle(pregunta.texto_pregunta);
+          const codigoPregunta = codigoPorPreguntaId.get(pregunta._id) ?? '';
+          const tituloBloque = codigoPregunta === '7.3'
+            ? 'Mecanismos formales con Universidad'
+            : (codigoPregunta === '7.7' ? 'Mecanismos formales con PCyT' : null);
 
           return (
-          <div key={pregunta._id} className="p-6 rounded-xl border border-[#E5E7EB] bg-[#F5F7FA] hover:bg-[#FFFFFF] transition-all">
+          <div key={pregunta._id}>
+            {tituloBloque && (
+              <div className="mb-3 rounded-lg border border-[#BAE6FD] bg-[#E6F7FB] px-4 py-2">
+                <p className="text-sm font-semibold text-[#0C4A6E]">{tituloBloque}</p>
+              </div>
+            )}
+          <div className="p-6 rounded-xl border border-[#E5E7EB] bg-[#F5F7FA] hover:bg-[#FFFFFF] transition-all">
             <label className="block text-base font-medium text-[#333333] mb-1">
               <span className="text-[#00ACC9] mr-2 font-bold">{index + 1}.</span>
               {enunciado}
@@ -314,6 +333,7 @@ export default function EncuestaForm() {
             {errors[pregunta._id] && (
               <p className="text-sm text-[#00ACC9] mt-3">{errors[pregunta._id]?.message as string}</p>
             )}
+          </div>
           </div>
         );
         })}

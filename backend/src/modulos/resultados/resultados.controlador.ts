@@ -6,6 +6,7 @@ import { SeccionEncuesta } from '../encuestas/seccion_encuesta.modelo';
 import { Empresa } from '../empresas/empresa.modelo';
 import { RespuestaEncuesta } from '../respuestas/respuesta_encuesta.modelo';
 import { PreguntaEncuesta } from '../encuestas/pregunta_encuesta.modelo';
+import { OpcionPregunta } from '../encuestas/opcion_pregunta.modelo';
 import { SolicitudAutenticada } from '../../middlewares/verificar_token';
 import { calcularPorcentaje, clasificarNivel } from './madurez.servicio';
 
@@ -127,10 +128,19 @@ export const obtenerReporteDetallado = async (req: SolicitudAutenticada, res: Re
       .find({ _id: { $in: respuestas.map((r) => r.id_pregunta) } })
       .lean();
 
+    const opcionesPreguntas = await OpcionPregunta
+      .find({ id_pregunta: { $in: preguntas.map((p) => p._id) } })
+      .lean();
+
     const secciones = await SeccionEncuesta.find().lean();
 
     const mapaPreguntas = new Map(preguntas.map((p) => [String(p._id), p]));
     const mapaSecciones = new Map(secciones.map((s) => [String(s._id), s]));
+    const mapaOpcionesPorPreguntaValor = new Map(
+      opcionesPreguntas
+        .filter((o) => typeof o.valor_numerico === 'number')
+        .map((o) => [`${String(o.id_pregunta)}::${Number(o.valor_numerico)}`, o.texto_opcion] as const)
+    );
 
     const detalleItems = respuestas
       .map((r) => {
@@ -142,9 +152,16 @@ export const obtenerReporteDetallado = async (req: SolicitudAutenticada, res: Re
         const seccion = mapaSecciones.get(String(pregunta.id_seccion));
         const valor = typeof r.valor_numerico === 'number' ? r.valor_numerico : null;
         const esDatoGeneral = seccion?.nombre === 'datos_generales';
+        const textoOpcion = valor !== null
+          ? mapaOpcionesPorPreguntaValor.get(`${String(r.id_pregunta)}::${valor}`)
+          : null;
         const valorInformativo = typeof r.texto_respuesta === 'string' && r.texto_respuesta.trim().length > 0
           ? r.texto_respuesta.trim()
-          : valor;
+          : (esDatoGeneral && typeof textoOpcion === 'string' && textoOpcion.trim().length > 0
+              ? textoOpcion.trim()
+              : null)
+            ??
+            (esDatoGeneral ? null : valor);
         const porcentajeItem = !esDatoGeneral && valor !== null ? calcularPorcentaje(valor) : null;
         const nivelItem = porcentajeItem !== null ? clasificarNivel(porcentajeItem) : null;
 

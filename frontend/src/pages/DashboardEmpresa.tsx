@@ -150,6 +150,11 @@ const limpiarPrefijoDimension = (dimension: string): string => {
     .trim();
 };
 
+const esDimensionDatosGenerales = (dimension: string): boolean => {
+  const limpia = limpiarPrefijoDimension(dimension || '');
+  return normalizarDimension(limpia) === 'datosgenerales';
+};
+
 export default function DashboardEmpresa() {
   const navigate = useNavigate();
   const [resultado, setResultado] = useState<ResultadoGeneral | null>(null);
@@ -280,11 +285,12 @@ export default function DashboardEmpresa() {
   const mapaNombreDimension = new Map(chartData.map((d) => [normalizarDimension(d.name), d.name]));
 
   const detalleItems = reporteDetallado?.detalle_items ?? [];
-  const itemsPuntuables = detalleItems.filter((item) => item.porcentaje_item !== null);
+  const detalleItemsVista = detalleItems.filter((item) => !esDimensionDatosGenerales(item.dimension));
+  const itemsPuntuables = detalleItemsVista.filter((item) => item.porcentaje_item !== null);
   const textoBusqueda = busquedaItem.trim().toLowerCase();
   const filtrosActivos = filtroDimension !== 'todas' || filtroNivel !== 'todos' || Boolean(textoBusqueda);
 
-  const itemsFiltrados = detalleItems.filter((item) => {
+  const itemsFiltrados = detalleItemsVista.filter((item) => {
     const coincideDimension = filtroDimension === 'todas' || item.dimension === filtroDimension;
     const coincideNivel = filtroNivel === 'todos' || (item.nivel_item ?? '') === filtroNivel;
     const coincideBusqueda =
@@ -298,7 +304,7 @@ export default function DashboardEmpresa() {
   const itemsFiltradosPuntuables = itemsFiltrados.filter((item) => item.porcentaje_item !== null);
 
   const chartDataFiltrado = (() => {
-    if (!filtrosActivos || !detalleItems.length) {
+    if (!filtrosActivos || !detalleItemsVista.length) {
       return chartData;
     }
 
@@ -391,7 +397,7 @@ export default function DashboardEmpresa() {
   const dimensionesOrdenadas = [...chartDataOrdenado].sort((a, b) => b.puntaje - a.puntaje);
   const mejorDimension = dimensionesOrdenadas[0];
   const menorDimension = dimensionesOrdenadas[dimensionesOrdenadas.length - 1];
-  const opcionesDimension = Array.from(new Set(detalleItems.map((item) => item.dimension))).sort((a, b) => a.localeCompare(b));
+  const opcionesDimension = Array.from(new Set(detalleItemsVista.map((item) => item.dimension))).sort((a, b) => a.localeCompare(b));
 
   const itemsMuestra = itemsFiltrados;
   const itemsAgrupadosPorDimension = itemsMuestra.reduce<Record<string, DetalleItemReporte[]>>((acc, item) => {
@@ -403,6 +409,7 @@ export default function DashboardEmpresa() {
     return acc;
   }, {});
   const dimensionesItems = Object.keys(itemsAgrupadosPorDimension).sort((a, b) => a.localeCompare(b));
+  const mostrarNumeracionDesdeDos = detalleItems.some((item) => esDimensionDatosGenerales(item.dimension));
   const totalFiltrosActivos = Number(filtroDimension !== 'todas') + Number(filtroNivel !== 'todos') + Number(Boolean(busquedaItem.trim()));
 
   const puntajeGlobalVisible = chartDataOrdenado.length
@@ -430,7 +437,20 @@ export default function DashboardEmpresa() {
     }))
     .sort((a, b) => b.puntaje_redondeado - a.puntaje_redondeado);
   const vistaPreviaItems = reporteDetallado?.detalle_items ?? [];
-  const vistaPreviaItemsPorDimension = vistaPreviaItems.reduce<Record<string, DetalleItemReporte[]>>((acc, item) => {
+  const vistaPreviaItemsEvaluables = vistaPreviaItems.filter((item) => !esDimensionDatosGenerales(item.dimension));
+  const vistaPreviaItemsInformativos = vistaPreviaItems.filter((item) => esDimensionDatosGenerales(item.dimension));
+  const obtenerDatoGeneralPorCodigo = (codigo: string): string | null => {
+    const item = vistaPreviaItemsInformativos.find((it) => it.pregunta.trim().startsWith(`${codigo} `));
+    if (!item) return null;
+    const valor = item.valor_respuesta ?? item.valor_numerico;
+    if (valor === null || valor === undefined || String(valor).trim() === '') return null;
+    return String(valor);
+  };
+  const vistaPreviaTamanoGeneral = obtenerDatoGeneralPorCodigo('1.1');
+  const vistaPreviaNumeroEmpleados = obtenerDatoGeneralPorCodigo('1.2');
+  const vistaPreviaSectorGeneral = obtenerDatoGeneralPorCodigo('1.3');
+  const vistaPreviaParqueTecnologico = (reporteDetallado?.empresa?.parque_tecnologico ?? '').trim() || 'No registrado';
+  const vistaPreviaItemsPorDimension = vistaPreviaItemsEvaluables.reduce<Record<string, DetalleItemReporte[]>>((acc, item) => {
     const clave = item.dimension || 'Sin dimensión';
     if (!acc[clave]) {
       acc[clave] = [];
@@ -466,13 +486,15 @@ export default function DashboardEmpresa() {
     const resumen = detalle?.resumen;
     const dimensiones = detalle?.resultados_por_dimension ?? resultado.resultados_por_dimension;
     const items = detalle?.detalle_items ?? [];
+    const itemsEvaluables = items.filter((item) => !esDimensionDatosGenerales(item.dimension));
+    const itemsInformativos = items.filter((item) => esDimensionDatosGenerales(item.dimension));
     const resumenNiveles = detalle?.resumen_por_nivel ?? [];
 
     const empresa = detalle?.empresa;
     const puntajeGlobal = Math.round(resumen?.puntaje_global ?? resultado.puntaje_global);
     const nivelGlobal = etiquetaNivel(resumen?.nivel_global ?? resultado.nivel_global);
     const fecha = new Date(resumen?.fecha_calculo ?? resultado.fecha_calculo ?? Date.now()).toLocaleString('es-CO');
-    const totalItems = items.length;
+    const totalItems = itemsEvaluables.length;
     const totalDimensiones = dimensiones.length;
 
     const etiquetaDimensionPdf = (nombre: string): string => {
@@ -491,6 +513,70 @@ export default function DashboardEmpresa() {
     const menorDimension = dimensionesFormateadas[dimensionesFormateadas.length - 1];
     const brechaDimension = mejorDimension && menorDimension ? mejorDimension.puntaje - menorDimension.puntaje : 0;
 
+    const clasificarLecturaNivel = (nivel: string): string => {
+      if (nivel === 'Muy Bajo') return 'muestra un estado inicial de digitalizacion y requiere acciones prioritarias de corto plazo.';
+      if (nivel === 'Bajo') return 'evidencia avances puntuales, pero aun existen brechas estructurales relevantes.';
+      if (nivel === 'Intermedio') return 'refleja una base funcional, con oportunidad de escalar practicas y estandarizar resultados.';
+      if (nivel === 'Alto') return 'indica capacidades consolidadas que deben protegerse y apalancarse para acelerar valor.';
+      return 'representa una capacidad madura y diferenciadora para sostener ventajas competitivas.';
+    };
+
+    const obtenerImpactoDimension = (nombreDimension: string): string => {
+      const clave = normalizarDimension(nombreDimension);
+      if (clave.includes('innovacion')) return 'Impacta directamente la capacidad de lanzar mejoras, adaptarse al mercado y sostener crecimiento.';
+      if (clave.includes('integraciondigital')) return 'Influye en la eficiencia operativa al conectar procesos internos y la relacion con clientes y proveedores.';
+      if (clave.includes('inteligenciaartificial')) return 'Afecta la automatizacion, la velocidad de analisis y la calidad de la toma de decisiones.';
+      if (clave.includes('bigdata')) return 'Determina la capacidad de convertir datos en informacion accionable para decisiones de negocio.';
+      if (clave.includes('capitalhumano')) return 'Condiciona la adopcion real de tecnologia, el aprendizaje organizacional y la sostenibilidad del cambio.';
+      if (clave.includes('colaboracionuniversidadempresa')) return 'Potencia el acceso a conocimiento, innovacion aplicada y redes para proyectos de mayor impacto.';
+      return 'Tiene incidencia directa en el desempeno digital y en la competitividad de la empresa.';
+    };
+
+    const determinarFortalezaOBrecha = (puntaje: number): string => puntaje >= 60 ? 'Fortaleza' : 'Brecha digital';
+
+    const lecturaMadurezGlobal = `La madurez global de ${puntajeGlobal}% en nivel ${nivelGlobal} ${clasificarLecturaNivel(nivelGlobal)}`;
+    const lecturaMejorDimension = mejorDimension
+      ? `La mejor dimension es ${mejorDimension.nombre} (${mejorDimension.puntaje}%), lo que puede usarse como referente interno para transferir buenas practicas al resto de areas.`
+      : 'No se identifico una mejor dimension por ausencia de informacion suficiente.';
+    const lecturaDimensionCritica = menorDimension
+      ? `La dimension critica es ${menorDimension.nombre} (${menorDimension.puntaje}%), por lo que conviene priorizar planes de mejora en este frente para reducir riesgos de rezago.`
+      : 'No se identifico una dimension critica por ausencia de informacion suficiente.';
+    const lecturaBrechaMaxima = `La brecha maxima entre dimensiones es de ${brechaDimension} puntos porcentuales; una dispersion alta sugiere desarrollo desigual y dificulta una transformacion digital equilibrada.`;
+    const lecturaRadar = mejorDimension && menorDimension
+      ? `El mapa de madurez muestra el equilibrio entre dimensiones: cuanto mas simetrico es el poligono, mayor coherencia digital. En este diagnostico, la mayor fortaleza se observa en ${mejorDimension.nombre} y la mayor brecha en ${menorDimension.nombre}.`
+      : 'El mapa de madurez permite visualizar el balance de capacidades digitales entre dimensiones evaluadas.';
+    const analisisGeneralDimensiones = `En conjunto, los resultados por dimension muestran un nivel ${nivelGlobal} de madurez global, con diferencias internas que requieren mantener fortalezas y cerrar brechas para mejorar competitividad, productividad y capacidad de innovacion.`;
+
+    const interpretacionPorDimension = dimensionesFormateadas
+      .map((d) => {
+        const naturaleza = determinarFortalezaOBrecha(d.puntaje);
+        const mensajeNivel = clasificarLecturaNivel(d.nivel);
+        const impacto = obtenerImpactoDimension(d.nombre);
+        return `
+          <div class="level-card">
+            <div class="level-head">${escaparHtml(d.nombre)} - ${d.puntaje}% (${escaparHtml(d.nivel)})</div>
+            <div class="level-meta">${escaparHtml(naturaleza)}: ${escaparHtml(mensajeNivel)}</div>
+            <div class="muted" style="margin-top:8px">${escaparHtml(impacto)}</div>
+          </div>
+        `;
+      })
+      .join('');
+
+    const conclusionesDiagnostico = [
+      `La empresa presenta una madurez digital global de ${puntajeGlobal}% (${nivelGlobal}), con avances diferenciados entre dimensiones.`,
+      mejorDimension ? `Se evidencia una fortaleza principal en ${mejorDimension.nombre}, que puede convertirse en palanca para acelerar otras capacidades.` : 'No se pudo identificar una fortaleza dominante por falta de datos.',
+      menorDimension ? `La mayor prioridad de mejora se concentra en ${menorDimension.nombre}, donde se observa el principal riesgo de rezago.` : 'No se pudo identificar una prioridad critica por falta de datos.',
+      `La brecha interna de ${brechaDimension}% confirma la necesidad de una hoja de ruta que alinee procesos, tecnologia y talento de manera integral.`
+    ];
+
+    const recomendacionesEstrategicas = [
+      'Definir un plan de transformacion digital por fases (90, 180 y 360 dias), con responsables, metas e indicadores por dimension.',
+      menorDimension ? `Priorizar inversiones y proyectos piloto en ${menorDimension.nombre} para cerrar la brecha critica con acciones de impacto rapido.` : 'Priorizar las dimensiones con menor desempeno para cerrar brechas criticas.',
+      'Fortalecer la gestion del cambio: capacitacion del equipo, apropiacion de herramientas digitales y seguimiento de adopcion.',
+      'Establecer un tablero de control mensual con indicadores de innovacion, integracion, analitica y productividad para monitorear progreso.',
+      'Consolidar alianzas con universidad y/o PCyT para acelerar transferencia de conocimiento, asistencia tecnica y desarrollo de proyectos aplicados.'
+    ];
+
     const filasResumenDimensiones = dimensionesFormateadas
       .map((d) => `
         <tr>
@@ -501,11 +587,23 @@ export default function DashboardEmpresa() {
       `)
       .join('');
 
-    const itemsPorDimension = items.reduce<Record<string, number>>((acc, item) => {
+    const itemsPorDimension = itemsEvaluables.reduce<Record<string, number>>((acc, item) => {
       const nombre = item.dimension || 'Sin dimensión';
       acc[nombre] = (acc[nombre] ?? 0) + 1;
       return acc;
     }, {});
+
+    const obtenerDatoGeneralPorCodigoPdf = (codigo: string): string | null => {
+      const item = itemsInformativos.find((it) => it.pregunta.trim().startsWith(`${codigo} `));
+      if (!item) return null;
+      const valor = item.valor_respuesta ?? item.valor_numerico;
+      if (valor === null || valor === undefined || String(valor).trim() === '') return null;
+      return String(valor);
+    };
+    const tamanoGeneralPdf = obtenerDatoGeneralPorCodigoPdf('1.1');
+    const numeroEmpleadosPdf = obtenerDatoGeneralPorCodigoPdf('1.2');
+    const sectorGeneralPdf = obtenerDatoGeneralPorCodigoPdf('1.3');
+    const parqueTecnologicoPdf = (empresa?.parque_tecnologico ?? '').trim() || 'No registrado';
 
     const chipsItemsDimension = Object.entries(itemsPorDimension)
       .sort((a, b) => a[0].localeCompare(b[0]))
@@ -574,7 +672,7 @@ export default function DashboardEmpresa() {
       })
       .join('');
 
-    const itemsDetallePorDimension = items.reduce<Record<string, DetalleItemReporte[]>>((acc, item) => {
+    const itemsDetallePorDimension = itemsEvaluables.reduce<Record<string, DetalleItemReporte[]>>((acc, item) => {
       const clave = item.dimension || 'Sin dimensión';
       if (!acc[clave]) {
         acc[clave] = [];
@@ -685,6 +783,12 @@ export default function DashboardEmpresa() {
             .summary-box { background: #F8FAFC; border: 1px solid #E5E7EB; border-radius: 10px; padding: 10px; }
             .summary-box .k { color: #64748B; font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em; font-weight: 800; }
             .summary-box .v { color: #0F172A; font-size: 16px; font-weight: 800; margin-top: 2px; }
+            .profile-grid { margin-top: 10px; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+            .profile-card { border: 1px solid #E2E8F0; border-radius: 10px; background: #F8FAFC; padding: 10px; }
+            .profile-title { font-size: 10px; text-transform: uppercase; letter-spacing: 0.07em; color: #64748B; font-weight: 800; margin: 0 0 6px; }
+            .profile-line { font-size: 12px; color: #334155; margin: 0 0 4px; line-height: 1.35; }
+            .profile-line:last-child { margin-bottom: 0; }
+            .profile-line strong { color: #0F172A; font-weight: 800; }
             .chips { margin-top: 10px; display: flex; flex-wrap: wrap; gap: 6px; }
             .chip { display: inline-flex; align-items: center; border: 1px solid #D1D5DB; border-radius: 999px; padding: 4px 9px; font-size: 11px; font-weight: 700; color: #334155; background: #FFFFFF; }
             .two-col { display: grid; grid-template-columns: 1.1fr 0.9fr; gap: 14px; }
@@ -741,7 +845,30 @@ export default function DashboardEmpresa() {
               <h2 class="section-title">Reporte de Madurez Digital - SIEDSS</h2>
               <p class="muted">Universidad Cooperativa de Colombia</p>
               <p class="muted">Fecha de cálculo: ${escaparHtml(fecha)}</p>
-              ${empresa ? `<p class="muted">Nombre de la empresa: ${escaparHtml(empresa.nombre_empresa ?? empresa.razon_social)} | NIT: ${escaparHtml(empresa.nit)} | Sector: ${escaparHtml(empresa.sector)} | Ciudad: ${escaparHtml(empresa.ciudad)} | Tamaño: ${escaparHtml(empresa.tamano ?? 'N/A')} | Año constitución: ${empresa.ano_constitucion ?? 'N/A'} | Representante: ${escaparHtml(empresa.representante ?? 'N/A')} | Cargo entrevistado: ${escaparHtml(empresa.cargo_entrevistado ?? 'N/A')} | Teléfono: ${escaparHtml(empresa.telefono ?? 'N/A')} | Parque tecnológico: ${escaparHtml(empresa.parque_tecnologico ?? 'N/A')}</p>` : ''}
+              ${empresa ? `
+                <div class="profile-grid">
+                  <div class="profile-card">
+                    <p class="profile-title">Identificación</p>
+                    <p class="profile-line"><strong>Empresa:</strong> ${escaparHtml(empresa.nombre_empresa ?? empresa.razon_social)}</p>
+                    <p class="profile-line"><strong>NIT:</strong> ${escaparHtml(empresa.nit)}</p>
+                  </div>
+                  <div class="profile-card">
+                    <p class="profile-title">Contexto</p>
+                    <p class="profile-line"><strong>Sector:</strong> ${escaparHtml(sectorGeneralPdf ?? empresa.sector)}</p>
+                    <p class="profile-line"><strong>Ciudad:</strong> ${escaparHtml(empresa.ciudad)}</p>
+                    <p class="profile-line"><strong>Tamaño:</strong> ${escaparHtml(tamanoGeneralPdf ?? empresa.tamano ?? 'N/A')}</p>
+                    <p class="profile-line"><strong>Número medio de empleados:</strong> ${escaparHtml(numeroEmpleadosPdf ?? 'N/A')}</p>
+                  </div>
+                  <div class="profile-card">
+                    <p class="profile-title">Contacto y Relación</p>
+                    <p class="profile-line"><strong>Año constitución:</strong> ${empresa.ano_constitucion ?? 'N/A'}</p>
+                    <p class="profile-line"><strong>Representante:</strong> ${escaparHtml(empresa.representante ?? 'N/A')}</p>
+                    <p class="profile-line"><strong>Cargo entrevistado:</strong> ${escaparHtml(empresa.cargo_entrevistado ?? 'N/A')}</p>
+                    <p class="profile-line"><strong>Teléfono:</strong> ${escaparHtml(empresa.telefono ?? 'N/A')}</p>
+                    <p class="profile-line"><strong>Parque tecnológico:</strong> ${escaparHtml(parqueTecnologicoPdf)}</p>
+                  </div>
+                </div>
+              ` : ''}
               <div class="kpi-grid">
                 <div class="kpi"><div class="k">Puntaje Global</div><div class="v">${puntajeGlobal}%</div></div>
                 <div class="kpi"><div class="k">Nivel Global</div><div class="v" style="font-size:20px">${escaparHtml(nivelGlobal)}</div></div>
@@ -785,6 +912,15 @@ export default function DashboardEmpresa() {
             <div class="chips">
               ${chipsItemsDimension || '<span class="chip">Sin distribución de ítems disponible</span>'}
             </div>
+            <div class="dist-block">
+              <p class="dist-subtitle">Lectura estratégica de indicadores</p>
+              <ul>
+                <li>${escaparHtml(lecturaMadurezGlobal)}</li>
+                <li>${escaparHtml(lecturaMejorDimension)}</li>
+                <li>${escaparHtml(lecturaDimensionCritica)}</li>
+                <li>${escaparHtml(lecturaBrechaMaxima)}</li>
+              </ul>
+            </div>
           </div>
 
           <div class="card two-col">
@@ -807,6 +943,7 @@ export default function DashboardEmpresa() {
                 </svg>
                 ` : '<p class="muted">No hay suficientes dimensiones para construir el diamante.</p>'}
               </div>
+              <p class="muted" style="margin-top:8px">${escaparHtml(lecturaRadar)}</p>
             </div>
             <div>
               <h2 class="section-title">Resultados por Dimensión</h2>
@@ -822,6 +959,15 @@ export default function DashboardEmpresa() {
                   ${filasResumenDimensiones || '<tr><td colspan="3">Sin resultados por dimensión.</td></tr>'}
                 </tbody>
               </table>
+              <p class="muted" style="margin-top:8px">${escaparHtml(analisisGeneralDimensiones)}</p>
+            </div>
+          </div>
+
+          <div class="card">
+            <h2 class="section-title">Interpretación por Dimensión</h2>
+            <p class="muted">Explicación ejecutiva del resultado, nivel de madurez, condición de fortaleza o brecha, e impacto para la empresa.</p>
+            <div class="level-grid" style="margin-top:10px">
+              ${interpretacionPorDimension || '<p class="muted">No hay dimensiones para interpretar.</p>'}
             </div>
           </div>
 
@@ -842,6 +988,20 @@ export default function DashboardEmpresa() {
             <div class="item-groups">
               ${bloquesItemsVisual || '<p class="muted">No hay detalle de ítems para mostrar.</p>'}
             </div>
+          </div>
+
+          <div class="card">
+            <h2 class="section-title">Conclusiones del Diagnóstico</h2>
+            <ul>
+              ${conclusionesDiagnostico.map((texto) => `<li>${escaparHtml(texto)}</li>`).join('')}
+            </ul>
+          </div>
+
+          <div class="card">
+            <h2 class="section-title">Recomendaciones Estratégicas</h2>
+            <ul>
+              ${recomendacionesEstrategicas.map((texto) => `<li>${escaparHtml(texto)}</li>`).join('')}
+            </ul>
           </div>
 
         </body>
@@ -965,7 +1125,7 @@ export default function DashboardEmpresa() {
               Limpiar filtros
             </button>
             <p className="text-xs text-[#6B7280]">
-              Mostrando {itemsFiltrados.length} de {detalleItems.length} ítems.
+              Mostrando {itemsFiltrados.length} de {detalleItemsVista.length} ítems.
             </p>
           </div>
         </motion.div>
@@ -1207,7 +1367,7 @@ export default function DashboardEmpresa() {
               <tbody>
                 {dimensionesItems.map((dimension, index) => {
                   const nombreBase = limpiarPrefijoDimension(dimension) || dimension;
-                  const tituloDimension = `${convertirARomano(index + 1)}. ${nombreBase}`;
+                  const tituloDimension = `${convertirARomano(index + (mostrarNumeracionDesdeDos ? 2 : 1))}. ${nombreBase}`;
                   return (
                   <Fragment key={`group-${dimension}`}>
                     <tr className="bg-[#EEF7FA]">
@@ -1312,15 +1472,28 @@ export default function DashboardEmpresa() {
                   <p className="text-sm text-[#475569]">Fecha de cálculo: {vistaPreviaFecha}</p>
                   {reporteDetallado?.empresa && (
                     <>
-                    <p className="text-sm text-[#475569] mt-1">
-                      Nombre de la empresa: {reporteDetallado.empresa.nombre_empresa ?? reporteDetallado.empresa.razon_social} | NIT: {reporteDetallado.empresa.nit}
-                    </p>
-                    <p className="text-sm text-[#475569] mt-1">
-                      Sector: {reporteDetallado.empresa.sector} | Ciudad: {reporteDetallado.empresa.ciudad} | Tamaño: {reporteDetallado.empresa.tamano ?? 'N/A'}
-                    </p>
-                    <p className="text-sm text-[#475569] mt-1">
-                      Año constitución: {reporteDetallado.empresa.ano_constitucion ?? 'N/A'} | Representante: {reporteDetallado.empresa.representante ?? 'N/A'} | Cargo: {reporteDetallado.empresa.cargo_entrevistado ?? 'N/A'} | Teléfono: {reporteDetallado.empresa.telefono ?? 'N/A'}
-                    </p>
+                    <div className="mt-2 grid grid-cols-1 md:grid-cols-3 gap-2">
+                      <div className="rounded-lg border border-[#DDEAF0] bg-[#FFFFFF] px-3 py-2">
+                        <p className="text-[10px] font-semibold uppercase tracking-[0.06em] text-[#64748B]">Identificación</p>
+                        <p className="text-xs text-[#334155] mt-1"><span className="font-semibold text-[#0F172A]">Empresa:</span> {reporteDetallado.empresa.nombre_empresa ?? reporteDetallado.empresa.razon_social}</p>
+                        <p className="text-xs text-[#334155] mt-1"><span className="font-semibold text-[#0F172A]">NIT:</span> {reporteDetallado.empresa.nit}</p>
+                      </div>
+                      <div className="rounded-lg border border-[#DDEAF0] bg-[#FFFFFF] px-3 py-2">
+                        <p className="text-[10px] font-semibold uppercase tracking-[0.06em] text-[#64748B]">Contexto</p>
+                        <p className="text-xs text-[#334155] mt-1"><span className="font-semibold text-[#0F172A]">Sector:</span> {vistaPreviaSectorGeneral ?? reporteDetallado.empresa.sector}</p>
+                        <p className="text-xs text-[#334155] mt-1"><span className="font-semibold text-[#0F172A]">Ciudad:</span> {reporteDetallado.empresa.ciudad}</p>
+                        <p className="text-xs text-[#334155] mt-1"><span className="font-semibold text-[#0F172A]">Tamaño:</span> {vistaPreviaTamanoGeneral ?? reporteDetallado.empresa.tamano ?? 'N/A'}</p>
+                        <p className="text-xs text-[#334155] mt-1"><span className="font-semibold text-[#0F172A]">Núm. empleados:</span> {vistaPreviaNumeroEmpleados ?? 'N/A'}</p>
+                      </div>
+                      <div className="rounded-lg border border-[#DDEAF0] bg-[#FFFFFF] px-3 py-2">
+                        <p className="text-[10px] font-semibold uppercase tracking-[0.06em] text-[#64748B]">Contacto y Relación</p>
+                        <p className="text-xs text-[#334155] mt-1"><span className="font-semibold text-[#0F172A]">Año constitución:</span> {reporteDetallado.empresa.ano_constitucion ?? 'N/A'}</p>
+                        <p className="text-xs text-[#334155] mt-1"><span className="font-semibold text-[#0F172A]">Representante:</span> {reporteDetallado.empresa.representante ?? 'N/A'}</p>
+                        <p className="text-xs text-[#334155] mt-1"><span className="font-semibold text-[#0F172A]">Cargo:</span> {reporteDetallado.empresa.cargo_entrevistado ?? 'N/A'}</p>
+                        <p className="text-xs text-[#334155] mt-1"><span className="font-semibold text-[#0F172A]">Teléfono:</span> {reporteDetallado.empresa.telefono ?? 'N/A'}</p>
+                        <p className="text-xs text-[#334155] mt-1"><span className="font-semibold text-[#0F172A]">Parque tecnológico:</span> {vistaPreviaParqueTecnologico}</p>
+                      </div>
+                    </div>
                     </>
                   )}
                 </div>
@@ -1336,8 +1509,8 @@ export default function DashboardEmpresa() {
                   <p className="mt-1 text-base font-bold text-[#0F172A]">{vistaPreviaDimensiones.length}</p>
                 </div>
                 <div className="rounded-lg border border-[#E2E8F0] bg-[#FFFFFF] px-3 py-2">
-                  <p className="text-[10px] font-semibold uppercase tracking-[0.07em] text-[#94A3B8]">Ítems</p>
-                  <p className="mt-1 text-base font-bold text-[#0F172A]">{vistaPreviaItems.length}</p>
+                  <p className="text-[10px] font-semibold uppercase tracking-[0.07em] text-[#94A3B8]">Ítems evaluados</p>
+                  <p className="mt-1 text-base font-bold text-[#0F172A]">{vistaPreviaItemsEvaluables.length}</p>
                 </div>
                 <div className="rounded-lg border border-[#E2E8F0] bg-[#FFFFFF] px-3 py-2">
                   <p className="text-[10px] font-semibold uppercase tracking-[0.07em] text-[#94A3B8]">Mejor dimensión</p>
@@ -1348,6 +1521,7 @@ export default function DashboardEmpresa() {
                   <p className="mt-1 text-sm font-semibold text-[#334155]">{vistaPreviaNiveles[0] ? etiquetaNivel(vistaPreviaNiveles[0].nivel) : 'Sin datos'}</p>
                 </div>
               </div>
+
             </div>
 
             <div className="border border-[#E5E7EB] bg-[#FFFFFF] rounded-xl p-4">

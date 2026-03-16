@@ -38,7 +38,4 @@ const usuarioSchema = new Schema<IUsuario>(
   }
 );
 
-// Índice recomendado para búsqueda por correo que será muy frecuente
-usuarioSchema.index({ correo: 1 });
-
 export const Usuario = model<IUsuario>('Usuario', usuarioSchema);
